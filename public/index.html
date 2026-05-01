@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PawShop — Зоомагазин</title>
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+<!-- ═══ HEADER ═══════════════════════════════════════════════ -->
+<header class="header">
+  <div class="container header__inner">
+    <a class="logo" href="/">
+      <span class="logo__paw">🐾</span>
+      <span class="logo__text">PawShop</span>
+    </a>
+
+    <nav class="nav" id="nav">
+      <a class="nav__link" href="#" data-page="home">Головна</a>
+      <a class="nav__link" href="#" data-page="shop">Магазин</a>
+      <a class="nav__link" href="#" data-page="about">Про нас</a>
+    </nav>
+
+    <div class="header__actions">
+      <button class="btn-icon" id="searchToggle" title="Пошук">🔍</button>
+      <button class="btn-icon cart-btn" id="cartBtn" title="Кошик">
+        🛒
+        <span class="cart-badge" id="cartBadge">0</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Search bar -->
+  <div class="search-bar" id="searchBar">
+    <div class="container">
+      <input type="text" id="searchInput" class="search-input" placeholder="Пошук товарів...">
+      <button class="btn-icon" id="searchClose">✕</button>
+    </div>
+  </div>
+</header>
+
+<!-- ═══ PAGES ════════════════════════════════════════════════ -->
+<main id="app">
+
+  <!-- HOME PAGE -->
+  <div id="page-home" class="page active">
+
+    <!-- Hero -->
+    <section class="hero">
+      <div class="container hero__inner">
+        <div class="hero__content">
+          <p class="hero__sub">Все найкраще для вашого улюбленця</p>
+          <h1 class="hero__title">PawShop —<br>з любов'ю<br>до тварин</h1>
+          <p class="hero__desc">Преміум корми, аксесуари та товари для котів, собак, птахів і рибок. Доставка по всій Україні.</p>
+          <div class="hero__btns">
+            <button class="btn btn--primary" onclick="showPage('shop')">Перейти до магазину</button>
+            <button class="btn btn--outline" onclick="document.getElementById('categories-section').scrollIntoView({behavior:'smooth'})">Категорії</button>
+          </div>
+        </div>
+        <div class="hero__visual">
+          <div class="hero__circle">
+            <div class="hero__emoji-ring">
+              <span style="--i:0">🐱</span>
+              <span style="--i:1">🐶</span>
+              <span style="--i:2">🐠</span>
+              <span style="--i:3">🦜</span>
+              <span style="--i:4">🐇</span>
+            </div>
+            <div class="hero__center">🐾</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stats -->
+    <section class="stats">
+      <div class="container stats__grid">
+        <div class="stat-card"><span class="stat-card__num">500+</span><span class="stat-card__label">Товарів</span></div>
+        <div class="stat-card"><span class="stat-card__num">12K+</span><span class="stat-card__label">Клієнтів</span></div>
+        <div class="stat-card"><span class="stat-card__num">4.9★</span><span class="stat-card__label">Рейтинг</span></div>
+        <div class="stat-card"><span class="stat-card__num">1-2д</span><span class="stat-card__label">Доставка</span></div>
+      </div>
+    </section>
+
+    <!-- Categories -->
+    <section class="section" id="categories-section">
+      <div class="container">
+        <h2 class="section__title">Категорії</h2>
+        <div class="categories-grid" id="homeCategories">
+          <div class="category-skeleton"></div>
+          <div class="category-skeleton"></div>
+          <div class="category-skeleton"></div>
+          <div class="category-skeleton"></div>
+          <div class="category-skeleton"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Featured products -->
+    <section class="section section--alt">
+      <div class="container">
+        <h2 class="section__title">Популярні товари</h2>
+        <div class="products-grid" id="featuredProducts"></div>
+        <div class="section__footer">
+          <button class="btn btn--outline" onclick="showPage('shop')">Всі товари →</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Why Us -->
+    <section class="section">
+      <div class="container">
+        <h2 class="section__title">Чому обирають нас</h2>
+        <div class="benefits-grid">
+          <div class="benefit-card"><div class="benefit-card__icon">🚚</div><h3>Швидка доставка</h3><p>Доставимо замовлення протягом 1–2 днів по всій Україні.</p></div>
+          <div class="benefit-card"><div class="benefit-card__icon">✅</div><h3>Гарантія якості</h3><p>Тільки сертифіковані товари від перевірених виробників.</p></div>
+          <div class="benefit-card"><div class="benefit-card__icon">💬</div><h3>Консультація</h3><p>Наші фахівці допоможуть обрати правильний корм чи аксесуар.</p></div>
+          <div class="benefit-card"><div class="benefit-card__icon">🔄</div><h3>Легке повернення</h3><p>Повернення товару протягом 14 днів без зайвих питань.</p></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- SHOP PAGE -->
+  <div id="page-shop" class="page">
+    <div class="container shop-layout">
+
+      <!-- Sidebar filters -->
+      <aside class="sidebar">
+        <h3 class="sidebar__title">Фільтри</h3>
+
+        <div class="filter-group">
+          <label class="filter-label">Категорія</label>
+          <div class="filter-options" id="filterCategories">
+            <label class="filter-radio"><input type="radio" name="cat" value=""> Всі</label>
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Вид тварини</label>
+          <div class="filter-options">
+            <label class="filter-radio"><input type="radio" name="pet" value=""> Всі</label>
+            <label class="filter-radio"><input type="radio" name="pet" value="cat"> 🐱 Коти</label>
+            <label class="filter-radio"><input type="radio" name="pet" value="dog"> 🐶 Собаки</label>
+            <label class="filter-radio"><input type="radio" name="pet" value="bird"> 🦜 Птахи</label>
+            <label class="filter-radio"><input type="radio" name="pet" value="fish"> 🐠 Рибки</label>
+            <label class="filter-radio"><input type="radio" name="pet" value="rabbit"> 🐇 Гризуни</label>
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Сортування</label>
+          <select id="sortSelect" class="filter-select">
+            <option value="id|ASC">За замовчуванням</option>
+            <option value="price|ASC">Ціна: від низької</option>
+            <option value="price|DESC">Ціна: від високої</option>
+            <option value="rating|DESC">За рейтингом</option>
+            <option value="name|ASC">За назвою А-Я</option>
+          </select>
+        </div>
+
+        <button class="btn btn--primary btn--full" id="applyFilters">Застосувати</button>
+        <button class="btn btn--ghost btn--full" id="resetFilters">Скинути</button>
+      </aside>
+
+      <!-- Products area -->
+      <div class="shop-main">
+        <div class="shop-header">
+          <p class="shop-count" id="shopCount">Завантаження...</p>
+          <div class="view-toggle">
+            <button class="view-btn active" data-view="grid">⊞</button>
+            <button class="view-btn" data-view="list">☰</button>
+          </div>
+        </div>
+        <div class="products-grid" id="shopProducts"></div>
+        <div class="pagination" id="pagination"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ABOUT PAGE -->
+  <div id="page-about" class="page">
+    <div class="container about-page">
+      <h1 class="about-page__title">Про нас</h1>
+      <div class="about-grid">
+        <div>
+          <p class="about-text">PawShop — це інтернет-магазин зоотоварів, заснований у 2020 році з однією місією: зробити ваших домашніх улюбленців щасливими та здоровими.</p>
+          <p class="about-text">Ми ретельно відбираємо кожен товар, щоб він відповідав найвищим стандартам якості. Наша команда складається з ветеринарів, зоологів та справжніх любителів тварин.</p>
+          <p class="about-text">На сьогодні ми пропонуємо понад 500 позицій: корми преміум-класу, аксесуари, іграшки, засоби догляду та багато іншого для котів, собак, птахів та рибок.</p>
+        </div>
+        <div class="about-stats-col">
+          <div class="about-stat"><span>2020</span><small>рік заснування</small></div>
+          <div class="about-stat"><span>500+</span><small>товарів у каталозі</small></div>
+          <div class="about-stat"><span>12 000+</span><small>задоволених клієнтів</small></div>
+          <div class="about-stat"><span>24 обл.</span><small>доставка по Україні</small></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRODUCT MODAL -->
+  <div id="productModal" class="modal" role="dialog" aria-modal="true">
+    <div class="modal__overlay" id="modalOverlay"></div>
+    <div class="modal__box" id="modalBox"></div>
+  </div>
+
+  <!-- CART DRAWER -->
+  <div id="cartDrawer" class="drawer">
+    <div class="drawer__overlay" id="drawerOverlay"></div>
+    <div class="drawer__panel">
+      <div class="drawer__head">
+        <h3>🛒 Кошик</h3>
+        <button class="btn-icon" id="closeCart">✕</button>
+      </div>
+      <div class="drawer__body" id="cartItems"></div>
+      <div class="drawer__foot" id="cartFoot" style="display:none">
+        <div class="cart-total"><span>Разом:</span><strong id="cartTotal">0 ₴</strong></div>
+        <button class="btn btn--primary btn--full" id="checkoutBtn">Оформити замовлення</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHECKOUT MODAL -->
+  <div id="checkoutModal" class="modal" role="dialog">
+    <div class="modal__overlay" id="checkoutOverlay"></div>
+    <div class="modal__box modal__box--checkout" id="checkoutBox">
+      <div class="modal__head">
+        <h3>Оформлення замовлення</h3>
+        <button class="btn-icon" id="closeCheckout">✕</button>
+      </div>
+      <div id="checkoutContent"></div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ═══ FOOTER ════════════════════════════════════════════════ -->
+<footer class="footer">
+  <div class="container footer__inner">
+    <div class="footer__brand">
+      <span class="logo__paw">🐾</span>
+      <span class="logo__text">PawShop</span>
+      <p>З любов'ю до тварин з 2020 року</p>
+    </div>
+    <div class="footer__links">
+      <h4>Навігація</h4>
+      <a href="#" onclick="showPage('home')">Головна</a>
+      <a href="#" onclick="showPage('shop')">Каталог</a>
+      <a href="#" onclick="showPage('about')">Про нас</a>
+    </div>
+    <div class="footer__contact">
+      <h4>Контакти</h4>
+      <p>📞 +38 (050) 123-45-67</p>
+      <p>📧 info@pawshop.ua</p>
+      <p>📍 Київ, вул. Хрещатик, 1</p>
+    </div>
+  </div>
+  <div class="footer__bottom">
+    <p>© 2026 PawShop. Всі права захищено.</p>
+  </div>
+</footer>
+
+<!-- Toast notifications -->
+<div id="toast" class="toast"></div>
+
+<script src="/js/app.js"></script>
+</body>
+</html>

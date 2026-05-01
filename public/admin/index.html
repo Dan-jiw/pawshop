@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PawShop — Адмін-панель</title>
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Syne:wght@500;700;800&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/admin/admin.css"/>
+</head>
+<body>
+
+<div id="authGate" class="auth-gate">
+  <div class="auth-gate__box">
+    <div class="auth-gate__logo">🐾 PawShop <span>ADMIN</span></div>
+    <h2>Вхід для адміністратора</h2>
+    <p>Доступ тільки для адміністраторів</p>
+    <div class="ag-group">
+      <label>Email</label>
+      <input type="email" id="agEmail" class="ag-input" placeholder="admin@pawshop.ua"
+        onkeydown="if(event.key==='Enter')document.getElementById('agPass').focus()"/>
+    </div>
+    <div class="ag-group">
+      <label>Пароль</label>
+      <input type="password" id="agPass" class="ag-input" placeholder="••••••••"
+        onkeydown="if(event.key==='Enter')adminLogin()"/>
+    </div>
+    <div id="agError" class="ag-error" style="display:none"></div>
+    <button class="ag-btn" id="agBtn" onclick="adminLogin()">Увійти →</button>
+    <p class="ag-hint">Демо: admin@pawshop.ua / admin123</p>
+  </div>
+</div>
+
+<div id="adminApp" class="admin-layout" style="display:none">
+
+  <aside class="adm-sidebar">
+    <div class="adm-sidebar__logo">
+      <span>🐾</span>
+      <div><strong>PawShop</strong><small>Admin Panel</small></div>
+    </div>
+    <nav class="adm-nav">
+      <button class="adm-nav__item active" data-sec="products" onclick="showSec('products',this)">
+        <span>📦</span> Товари <span class="adm-nav__count" id="navCountProducts">—</span>
+      </button>
+      <button class="adm-nav__item" data-sec="categories" onclick="showSec('categories',this)">
+        <span>🗂️</span> Категорії <span class="adm-nav__count" id="navCountCategories">—</span>
+      </button>
+      <button class="adm-nav__item" data-sec="orders" onclick="showSec('orders',this)">
+        <span>📋</span> Замовлення <span class="adm-nav__count new" id="navCountOrders">—</span>
+      </button>
+      <button class="adm-nav__item" data-sec="reviews" onclick="showSec('reviews',this)">
+        <span>⭐</span> Відгуки
+      </button>
+    </nav>
+    <div class="adm-sidebar__foot">
+      <div class="adm-user">
+        <div class="adm-user__av" id="admAvatar">A</div>
+        <div>
+          <div id="admName">Admin</div>
+          <small id="admEmail">—</small>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:12px">
+        <a href="/" target="_blank" class="ag-btn-sm">↗ Сайт</a>
+        <button class="ag-btn-sm danger" onclick="adminLogout()">Вийти</button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="adm-main">
+
+    <!-- PRODUCTS -->
+    <section id="sec-products" class="adm-section active">
+      <div class="adm-section__head">
+        <div>
+          <h1>Товари</h1>
+          <p id="productsSubtitle">Завантаження...</p>
+        </div>
+        <button class="adm-btn adm-btn--primary" onclick="openProductForm()">+ Додати товар</button>
+      </div>
+      <div class="mini-stats" id="miniStats"></div>
+      <div class="adm-toolbar">
+        <input type="text" id="pSearch" class="adm-input" placeholder="🔍 Пошук..." oninput="debouncedLoadProducts()"/>
+        <select id="pCat" class="adm-select" onchange="loadProducts()">
+          <option value="">Всі категорії</option>
+        </select>
+        <select id="pStatus" class="adm-select" onchange="loadProducts()">
+          <option value="">Всі статуси</option>
+          <option value="1">✅ Активні</option>
+          <option value="0">❌ Неактивні</option>
+        </select>
+        <select id="pSort" class="adm-select" onchange="loadProducts()">
+          <option value="p.id|DESC">Новіші спочатку</option>
+          <option value="p.price|ASC">Ціна ↑</option>
+          <option value="p.price|DESC">Ціна ↓</option>
+          <option value="p.stock|ASC">Залишок ↑</option>
+          <option value="p.rating|DESC">Рейтинг ↓</option>
+        </select>
+      </div>
+      <div class="bulk-bar" id="bulkBar" style="display:none">
+        <span id="bulkCount">0 обрано</span>
+        <button onclick="bulkAction('activate')">✅ Активувати</button>
+        <button onclick="bulkAction('deactivate')">❌ Деактивувати</button>
+        <button onclick="bulkAction('delete')" class="danger">🗑️ Видалити</button>
+        <button onclick="clearSelection()">✕ Скасувати</button>
+      </div>
+      <div class="adm-table-wrap">
+        <table class="adm-table" id="productsTable">
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="selAll" onchange="toggleSelAll(this)"/></th>
+              <th>ID</th><th>Товар</th><th>Категорія</th>
+              <th>Ціна</th><th>Залишок</th><th>Рейтинг</th><th>Статус</th><th>Дії</th>
+            </tr>
+          </thead>
+          <tbody id="productsBody">
+            <tr><td colspan="9" class="table-empty"><div class="adm-spinner"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="adm-table-foot">
+        <span id="productsCount"></span>
+        <div class="adm-pagination" id="productsPagination"></div>
+      </div>
+    </section>
+
+    <!-- CATEGORIES -->
+    <section id="sec-categories" class="adm-section">
+      <div class="adm-section__head">
+        <div><h1>Категорії</h1><p>Управління категоріями товарів</p></div>
+        <button class="adm-btn adm-btn--primary" onclick="openCategoryForm()">+ Додати категорію</button>
+      </div>
+      <div class="categories-cards" id="categoriesGrid">
+        <div class="adm-spinner" style="margin:40px auto"></div>
+      </div>
+    </section>
+
+    <!-- ORDERS -->
+    <section id="sec-orders" class="adm-section">
+      <div class="adm-section__head">
+        <div><h1>Замовлення</h1><p>Управління замовленнями покупців</p></div>
+      </div>
+      <div class="adm-toolbar">
+        <input type="text" id="oSearch" class="adm-input" placeholder="🔍 Email або ім'я..." oninput="debouncedLoadOrders()"/>
+        <select id="oStatus" class="adm-select" onchange="loadOrders()">
+          <option value="">Всі статуси</option>
+          <option value="pending">⏳ Нові</option>
+          <option value="processing">⚙️ В обробці</option>
+          <option value="shipped">🚚 Відправлено</option>
+          <option value="delivered">✅ Доставлено</option>
+          <option value="cancelled">❌ Скасовано</option>
+        </select>
+      </div>
+      <div class="adm-table-wrap">
+        <table class="adm-table">
+          <thead>
+            <tr><th>#</th><th>Клієнт</th><th>Email</th><th>Сума</th><th>Оплата</th><th>Статус</th><th>Дата</th><th>Дія</th></tr>
+          </thead>
+          <tbody id="ordersBody">
+            <tr><td colspan="8" class="table-empty"><div class="adm-spinner"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- REVIEWS -->
+    <section id="sec-reviews" class="adm-section">
+      <div class="adm-section__head">
+        <div><h1>Відгуки</h1><p>Модерація відгуків покупців</p></div>
+      </div>
+      <div class="adm-table-wrap">
+        <table class="adm-table">
+          <thead>
+            <tr><th>ID</th><th>Товар</th><th>Автор</th><th>Оцінка</th><th>Коментар</th><th>Дата</th><th>Дія</th></tr>
+          </thead>
+          <tbody id="reviewsBody">
+            <tr><td colspan="7" class="table-empty"><div class="adm-spinner"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- PRODUCT FORM MODAL -->
+<div id="productFormModal" class="adm-modal">
+  <div class="adm-modal__overlay" onclick="closeProductForm()"></div>
+  <div class="adm-modal__box">
+    <div class="adm-modal__head">
+      <h3 id="productFormTitle">Додати товар</h3>
+      <button onclick="closeProductForm()">✕</button>
+    </div>
+    <div class="adm-form">
+      <input type="hidden" id="pf_id"/>
+      <div class="adm-form__grid">
+        <div class="adm-form__group span2">
+          <label>Назва *</label>
+          <input type="text" id="pf_name" class="adm-input" placeholder="Наприклад: Royal Canin Adult Cat"/>
+        </div>
+        <div class="adm-form__group">
+          <label>Категорія *</label>
+          <select id="pf_category" class="adm-select"></select>
+        </div>
+        <div class="adm-form__group">
+          <label>Вид тварини</label>
+          <select id="pf_pet" class="adm-select">
+            <option value="all">🐾 Всі</option>
+            <option value="cat">🐱 Коти</option>
+            <option value="dog">🐶 Собаки</option>
+            <option value="bird">🦜 Птахи</option>
+            <option value="fish">🐠 Рибки</option>
+            <option value="rabbit">🐇 Гризуни</option>
+          </select>
+        </div>
+        <div class="adm-form__group">
+          <label>Ціна (₴) *</label>
+          <input type="number" id="pf_price" class="adm-input" placeholder="0.00" min="0" step="0.01"/>
+        </div>
+        <div class="adm-form__group">
+          <label>Стара ціна (₴)</label>
+          <input type="number" id="pf_old_price" class="adm-input" placeholder="0.00" min="0" step="0.01"/>
+        </div>
+        <div class="adm-form__group">
+          <label>Залишок (шт.)</label>
+          <input type="number" id="pf_stock" class="adm-input" placeholder="0" min="0"/>
+        </div>
+        <div class="adm-form__group">
+          <label>Emoji</label>
+          <input type="text" id="pf_emoji" class="adm-input" placeholder="🐾" maxlength="4"/>
+        </div>
+        <div class="adm-form__group">
+          <label>Тег (напр: Хіт, Новинка)</label>
+          <input type="text" id="pf_tag" class="adm-input" placeholder="Необов'язково"/>
+        </div>
+        <div class="adm-form__group span2">
+          <label>Опис</label>
+          <textarea id="pf_desc" class="adm-textarea" placeholder="Детальний опис товару..."></textarea>
+        </div>
+        <div class="adm-form__group span2">
+          <label>Зображення</label>
+          <div class="file-drop" id="fileDrop" onclick="document.getElementById('pf_image').click()">
+            <div id="fileDropInner">
+              <span style="font-size:2rem">📷</span>
+              <p>Натисніть або перетягніть файл</p>
+              <small>JPG, PNG, WEBP · до 3MB</small>
+            </div>
+          </div>
+          <input type="file" id="pf_image" accept="image/*" style="display:none" onchange="previewImage(this)"/>
+        </div>
+        <div class="adm-form__group">
+          <label>Статус</label>
+          <select id="pf_active" class="adm-select">
+            <option value="1">✅ Активний</option>
+            <option value="0">❌ Неактивний</option>
+          </select>
+        </div>
+      </div>
+      <div id="pfError" class="ag-error" style="display:none"></div>
+      <div class="adm-form__actions">
+        <button class="ag-btn-sm" onclick="closeProductForm()">Скасувати</button>
+        <button class="adm-btn adm-btn--primary" id="pfSubmitBtn" onclick="submitProductForm()">Зберегти товар</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CATEGORY FORM MODAL -->
+<div id="categoryFormModal" class="adm-modal">
+  <div class="adm-modal__overlay" onclick="closeCategoryForm()"></div>
+  <div class="adm-modal__box adm-modal__box--sm">
+    <div class="adm-modal__head">
+      <h3 id="categoryFormTitle">Додати категорію</h3>
+      <button onclick="closeCategoryForm()">✕</button>
+    </div>
+    <div class="adm-form">
+      <input type="hidden" id="cf_id"/>
+      <div class="adm-form__group">
+        <label>Назва *</label>
+        <input type="text" id="cf_name" class="adm-input" placeholder="Корм"
+          oninput="autoSlug()"/>
+      </div>
+      <div class="adm-form__group">
+        <label>Slug * (URL-ідентифікатор)</label>
+        <input type="text" id="cf_slug" class="adm-input" placeholder="food"/>
+      </div>
+      <div class="adm-form__group">
+        <label>Emoji-іконка</label>
+        <input type="text" id="cf_icon" class="adm-input" placeholder="🥣" maxlength="4"/>
+      </div>
+      <div class="adm-form__group">
+        <label>Порядок відображення (менше = вище)</label>
+        <input type="number" id="cf_order" class="adm-input" placeholder="0" min="0"/>
+      </div>
+      <div id="cfError" class="ag-error" style="display:none"></div>
+      <div class="adm-form__actions">
+        <button class="ag-btn-sm" onclick="closeCategoryForm()">Скасувати</button>
+        <button class="adm-btn adm-btn--primary" onclick="submitCategoryForm()">Зберегти</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STOCK MODAL -->
+<div id="stockModal" class="adm-modal">
+  <div class="adm-modal__overlay" onclick="closeStockModal()"></div>
+  <div class="adm-modal__box adm-modal__box--sm">
+    <div class="adm-modal__head">
+      <h3>Оновити залишок</h3>
+      <button onclick="closeStockModal()">✕</button>
+    </div>
+    <div class="adm-form">
+      <p id="stockProductName" style="color:#94a3b8;margin-bottom:16px;font-size:.9rem"></p>
+      <div class="adm-form__group">
+        <label>Нова кількість (шт.)</label>
+        <input type="number" id="stockValue" class="adm-input" min="0"
+          onkeydown="if(event.key==='Enter')submitStock()"/>
+      </div>
+      <div class="adm-form__actions">
+        <button class="ag-btn-sm" onclick="closeStockModal()">Скасувати</button>
+        <button class="adm-btn adm-btn--primary" onclick="submitStock()">Зберегти</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="admToast" class="adm-toast"></div>
+<script src="/admin/admin.js"></script>
+</body>
+</html>

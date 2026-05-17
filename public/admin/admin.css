@@ -246,6 +246,9 @@ a {
   transition: var(--trans);
   text-align: left;
   margin-bottom: 2px;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 .adm-nav__item:hover {
   background: var(--surface2);
@@ -341,6 +344,14 @@ a {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 18px 20px;
+  transition:
+    border-color 0.2s ease,
+    transform 0.2s ease;
+  cursor: default;
+}
+.mini-stat:hover {
+  border-color: var(--border-l);
+  transform: translateY(-2px);
 }
 .mini-stat__val {
   font-family: var(--font-h);
@@ -476,8 +487,11 @@ a {
 .adm-table tr:last-child td {
   border-bottom: none;
 }
+.adm-table tbody tr {
+  transition: background 0.15s ease;
+}
 .adm-table tbody tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(240, 136, 62, 0.04);
 }
 .adm-table input[type="checkbox"] {
   accent-color: var(--primary);
@@ -498,21 +512,21 @@ a {
   gap: 10px;
 }
 .prod-cell__emoji {
-  width: 38px;
-  height: 38px;
+  width: 42px;
+  height: 42px;
   border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
   background: var(--surface2);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.3rem;
-  flex-shrink: 0;
-  overflow: hidden;
 }
 .prod-cell__emoji img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 .prod-cell__name {
   font-weight: 600;
@@ -654,9 +668,15 @@ a {
   align-items: center;
   gap: 14px;
   transition: border-color var(--trans);
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 .cat-card:hover {
-  border-color: var(--border-l);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  border-color: var(--primary);
 }
 .cat-card__icon {
   font-size: 2.2rem;
@@ -855,6 +875,7 @@ a {
 
 /* File drop */
 .file-drop {
+  position: relative;
   border: 2px dashed var(--border);
   border-radius: 10px;
   padding: 28px;
@@ -864,6 +885,18 @@ a {
     border-color var(--trans),
     background var(--trans);
   background: var(--surface2);
+}
+.file-drop::after {
+  content: "📎 Перетягніть або натисніть";
+  position: absolute;
+  bottom: 8px;
+  right: 12px;
+  font-size: 0.7rem;
+  color: var(--border-l);
+  pointer-events: none;
+}
+.file-drop img ~ p {
+  /* ховаємо підказку коли є превью */
 }
 .file-drop:hover {
   border-color: var(--primary);
@@ -895,6 +928,11 @@ a {
   font-size: 0.78rem;
   cursor: pointer;
   outline: none;
+  transition: border-color 0.18s ease;
+}
+.status-select:focus,
+.status-select:hover {
+  border-color: var(--primary);
 }
 
 /* ─── Spinner ───────────────────────────────────────────── */
@@ -913,6 +951,20 @@ a {
   }
 }
 
+@keyframes rowFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.adm-table tbody tr {
+  animation: rowFadeIn 0.2s ease both;
+}
+
 /* ─── Toast ─────────────────────────────────────────────── */
 .adm-toast {
   position: fixed;
@@ -929,6 +981,8 @@ a {
   z-index: 999;
   transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   white-space: nowrap;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 .adm-toast.show {
   transform: translateX(-50%) translateY(0);
@@ -985,6 +1039,12 @@ a {
   border-radius: var(--radius);
   padding: 18px;
 }
+@media (max-width: 500px) {
+  .order-details-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .od-label {
   font-size: 0.72rem;
   color: var(--muted);

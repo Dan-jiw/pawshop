@@ -486,14 +486,14 @@ img {
   box-shadow: var(--shadow-lg);
 }
 .product-card__thumb {
-  aspect-ratio: 1;
-  background: var(--bg-alt);
+  width: 100%;
+  aspect-ratio: 1 / 1; /* квадрат завжди */
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 4.5rem;
-  position: relative;
-  overflow: hidden;
+  background: var(--bg-soft, #f5f0eb);
+  border-radius: 12px 12px 0 0;
 }
 .product-card__thumb::after {
   content: "";
@@ -501,6 +501,18 @@ img {
   inset: 0;
   background: linear-gradient(to bottom, transparent 60%, rgba(0, 0, 0, 0.04));
 }
+.product-card__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* заповнює квадрат без спотворення */
+  object-position: center;
+  display: block;
+  transition: transform 0.35s ease;
+}
+.product-card:hover .product-card__img {
+  transform: scale(1.06);
+}
+
 .product-card__body {
   padding: 16px;
   flex: 1;
@@ -888,13 +900,23 @@ img {
   padding: 28px;
 }
 .product-modal__emoji {
-  aspect-ratio: 1;
-  background: var(--bg-alt);
+  width: 100%;
+  max-width: 360px;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
   border-radius: 16px;
+  background: var(--bg-soft, #f5f0eb);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 7rem;
+  flex-shrink: 0;
+}
+.product-modal__img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain; /* contain щоб не обрізало товар */
+  object-position: center;
+  display: block;
 }
 .product-modal__name {
   font-family: var(--font-head);

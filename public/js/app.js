@@ -29,8 +29,8 @@ const state = {
 
 const getImgPath = (path) => {
   if (!path) return null;
-  const cleanPath = path.startsWith("/") ? path : `/${path}`;
-  return cleanPath.replace("//", "/");
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  return path.startsWith("/") ? path : `/${path}`;
 };
 
 /* ─── API helper ─────────────────────────────────────────── */

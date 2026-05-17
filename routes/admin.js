@@ -121,9 +121,7 @@ router.get("/products", adminOnly, async (req, res) => {
   }
 });
 
-// GET /api/admin/products/:id — ОКРЕМИЙ ТОВАР (включно з неактивними!)
-// ВИПРАВЛЕННЯ: раніше фронт використовував публічний /api/products/:id
-// який не повертав неактивні товари → форма редагування ламалась
+// GET /api/admin/products/:id
 router.get("/products/:id", adminOnly, async (req, res) => {
   try {
     const [[product]] = await db.query(

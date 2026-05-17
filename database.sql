@@ -2,9 +2,6 @@
 -- PawShop - База даних для інтернет-магазину зоотоварів
 -- ============================================================
 
--- CREATE DATABASE IF NOT EXISTS pawshop CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
--- USE pawshop;
-
 -- Категорії товарів
 CREATE TABLE IF NOT EXISTS categories (
     id INT AUTO_INCREMENT PRIMARY KEY,

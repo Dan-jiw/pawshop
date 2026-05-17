@@ -487,7 +487,7 @@ img {
 }
 .product-card__thumb {
   width: 100%;
-  aspect-ratio: 1 / 1; /* квадрат завжди */
+  aspect-ratio: 1 / 1;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -504,7 +504,7 @@ img {
 .product-card__img {
   width: 100%;
   height: 100%;
-  object-fit: cover; /* заповнює квадрат без спотворення */
+  object-fit: cover;
   object-position: center;
   display: block;
   transition: transform 0.35s ease;

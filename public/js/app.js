@@ -587,12 +587,13 @@ document.getElementById("closeCart").addEventListener("click", closeCart);
 document.getElementById("drawerOverlay").addEventListener("click", closeCart);
 document.getElementById("checkoutBtn").addEventListener("click", openCheckout);
 
-function renderCartThumb(image) {
-  if (!image) return `<span style="font-size:1.8rem">🐾</span>`;
-  if (isImageUrl(image)) {
-    return `<img src="${getImgPath(image)}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:8px" onerror="this.style.display='none'">`;
+function renderCartThumb(item) {
+  const src = item.image || item.emoji || null;
+  if (!src) return `<span style="font-size:1.8rem">🐾</span>`;
+  if (isImageUrl(src)) {
+    return `<img src="${getImgPath(src)}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:8px" onerror="this.style.display='none'">`;
   }
-  return `<span style="font-size:1.8rem">${image}</span>`;
+  return `<span style="font-size:1.8rem">${src}</span>`;
 }
 
 function renderCartDrawer() {
@@ -609,7 +610,7 @@ function renderCartDrawer() {
       (item) => `
     <div class="cart-item">
       <div class="cart-item__emoji">
-        ${renderCartThumb(item.image || item.emoji)}
+       ${renderCartThumb(item)}
       </div>
       <div class="cart-item__info">
         <div class="cart-item__name">${escapeHtml(item.name)}</div>
@@ -666,7 +667,7 @@ function renderCheckoutForm() {
             <span>
               ${
                 isImageUrl(i.image || i.emoji)
-                  ? `<img src="${getImgPath(i.image || i.emoji)}" width="30" style="vertical-align:middle;margin-right:8px;border-radius:4px;object-fit:cover">`
+                  ? `<img src="${getImgPath(i.image || i.emoji)}" width="30" style="vertical-align:middle;margin-right:8px;border-radius:4px;object-fit:cover" onerror="this.style.display='none'">`
                   : `<span style="margin-right:8px">${i.image || i.emoji || "🐾"}</span>`
               }
               ${escapeHtml(i.name)} ×${i.qty}

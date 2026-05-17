@@ -1,30 +1,51 @@
+// routes/admin.js — PawShop Admin API
+// Зображення зберігаються на Cloudinary (не локально)
+// npm install cloudinary multer-storage-cloudinary
+
 const router = require("express").Router();
 const db = require("../config/db");
 const adminOnly = require("../middleware/adminOnly");
 const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
-const bcrypt = require('bcryptjs');
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const cloudinary = require("cloudinary").v2;
 
-// ─── Multer (завантаження зображень) ─────────────────────────
-const uploadDir = path.join(__dirname, "../public/uploads");
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+// ─── Cloudinary config ────────────────────────────────────────
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
-const storage = multer.diskStorage({
-  destination: (_, __, cb) => cb(null, uploadDir),
-  filename: (_, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const name = Date.now() + "-" + Math.round(Math.random() * 1e5) + ext;
-    cb(null, name);
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "pawshop/products",
+    allowed_formats: ["jpg", "jpeg", "png", "webp"],
+    transformation: [
+      { width: 800, height: 800, crop: "limit", quality: "auto" },
+    ],
   },
 });
+
 const upload = multer({
   storage,
-  limits: { fileSize: 3 * 1024 * 1024 }, // 3MB
+  limits: { fileSize: 3 * 1024 * 1024 },
   fileFilter: (_, file, cb) => {
     cb(null, /^image\/(jpeg|png|webp|gif)$/.test(file.mimetype));
   },
 });
+
+// Хелпер для видалення зображення з Cloudinary
+async function deleteCloudinaryImage(imageUrl) {
+  if (!imageUrl || !imageUrl.includes("cloudinary")) return;
+  try {
+    // Витягуємо public_id з URL
+    const parts = imageUrl.split("/");
+    const filename = parts[parts.length - 1].split(".")[0];
+    const folder = parts[parts.length - 2];
+    await cloudinary.uploader.destroy(`${folder}/${filename}`);
+  } catch (_) {}
+}
 
 // ════════════════════════════════════════════════════════════
 // PRODUCTS
@@ -48,8 +69,8 @@ router.get("/products", adminOnly, async (req, res) => {
     let params = [];
 
     if (search) {
-      where.push("p.name LIKE ?");
-      params.push(`%${search}%`);
+      where.push("(p.name LIKE ? OR p.description LIKE ?)");
+      params.push(`%${search}%`, `%${search}%`);
     }
     if (category) {
       where.push("c.slug = ?");
@@ -100,6 +121,24 @@ router.get("/products", adminOnly, async (req, res) => {
   }
 });
 
+// GET /api/admin/products/:id — ОКРЕМИЙ ТОВАР (включно з неактивними!)
+// ВИПРАВЛЕННЯ: раніше фронт використовував публічний /api/products/:id
+// який не повертав неактивні товари → форма редагування ламалась
+router.get("/products/:id", adminOnly, async (req, res) => {
+  try {
+    const [[product]] = await db.query(
+      `SELECT p.*, c.name AS category_name, c.slug AS category_slug
+       FROM products p JOIN categories c ON p.category_id = c.id
+       WHERE p.id = ?`,
+      [req.params.id],
+    );
+    if (!product) return res.status(404).json({ error: "Товар не знайдено" });
+    res.json(product);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/admin/products — створити товар
 router.post(
   "/products",
@@ -117,17 +156,19 @@ router.post(
         pet_type,
         emoji,
         tag,
+        is_active,
       } = req.body;
       if (!name || !price || !category_id)
         return res
           .status(400)
           .json({ error: "Назва, ціна та категорія обов'язкові" });
 
-      const image_url = req.file ? `/uploads/${req.file.filename}` : null;
+      // Cloudinary повертає secure_url замість локального шляху
+      const image_url = req.file ? req.file.path : null;
 
       const [result] = await db.query(
-        `INSERT INTO products (name, description, price, old_price, stock, category_id, pet_type, emoji, tag, image_url)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO products (name, description, price, old_price, stock, category_id, pet_type, emoji, tag, image_url, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           name,
           description || null,
@@ -139,6 +180,7 @@ router.post(
           emoji || "🐾",
           tag || null,
           image_url,
+          is_active !== undefined ? +is_active : 1,
         ],
       );
       res.json({ success: true, id: result.insertId });
@@ -185,7 +227,15 @@ router.put(
         is_active: is_active !== undefined ? +is_active : 1,
       };
 
-      if (req.file) fields.image_url = `/uploads/${req.file.filename}`;
+      if (req.file) {
+        // Видаляємо старе зображення з Cloudinary
+        const [[old]] = await db.query(
+          "SELECT image_url FROM products WHERE id=?",
+          [req.params.id],
+        );
+        if (old) await deleteCloudinaryImage(old.image_url);
+        fields.image_url = req.file.path;
+      }
 
       await db.query("UPDATE products SET ? WHERE id = ?", [
         fields,
@@ -201,6 +251,13 @@ router.put(
 // DELETE /api/admin/products/:id
 router.delete("/products/:id", adminOnly, async (req, res) => {
   try {
+    // Видаляємо зображення з Cloudinary перед видаленням товару
+    const [[product]] = await db.query(
+      "SELECT image_url FROM products WHERE id=?",
+      [req.params.id],
+    );
+    if (product) await deleteCloudinaryImage(product.image_url);
+
     await db.query("DELETE FROM products WHERE id = ?", [req.params.id]);
     res.json({ success: true });
   } catch (err) {
@@ -208,7 +265,7 @@ router.delete("/products/:id", adminOnly, async (req, res) => {
   }
 });
 
-// PATCH /api/admin/products/:id/stock — змінити залишок
+// PATCH /api/admin/products/:id/stock
 router.patch("/products/:id/stock", adminOnly, async (req, res) => {
   try {
     const { stock } = req.body;
@@ -224,7 +281,7 @@ router.patch("/products/:id/stock", adminOnly, async (req, res) => {
   }
 });
 
-// POST /api/admin/products/bulk — масові дії
+// POST /api/admin/products/bulk
 router.post("/products/bulk", adminOnly, async (req, res) => {
   try {
     const { ids, action } = req.body;
@@ -242,9 +299,17 @@ router.post("/products/bulk", adminOnly, async (req, res) => {
         `UPDATE products SET is_active=0 WHERE id IN (${placeholders})`,
         ids,
       );
-    else if (action === "delete")
+    else if (action === "delete") {
+      // Видаляємо зображення з Cloudinary для кожного товару
+      const [products] = await db.query(
+        `SELECT image_url FROM products WHERE id IN (${placeholders})`,
+        ids,
+      );
+      await Promise.all(
+        products.map((p) => deleteCloudinaryImage(p.image_url)),
+      );
       await db.query(`DELETE FROM products WHERE id IN (${placeholders})`, ids);
-    else return res.status(400).json({ error: "Невідома дія" });
+    } else return res.status(400).json({ error: "Невідома дія" });
 
     res.json({ success: true, affected: ids.length });
   } catch (err) {
@@ -271,12 +336,12 @@ router.get("/categories", adminOnly, async (req, res) => {
 
 router.post("/categories", adminOnly, async (req, res) => {
   try {
-    const { name, slug, icon } = req.body;
+    const { name, slug, icon, sort_order } = req.body;
     if (!name || !slug)
       return res.status(400).json({ error: "Назва та slug обов'язкові" });
     const [r] = await db.query(
-      "INSERT INTO categories (name, slug, icon) VALUES (?, ?, ?)",
-      [name, slug, icon || "🐾"],
+      "INSERT INTO categories (name, slug, icon, sort_order) VALUES (?, ?, ?, ?)",
+      [name, slug, icon || "🐾", sort_order || 0],
     );
     res.json({ success: true, id: r.insertId });
   } catch (err) {
@@ -320,10 +385,10 @@ router.delete("/categories/:id", adminOnly, async (req, res) => {
   }
 });
 
-// PUT /api/admin/categories/reorder — оновити порядок
+// PUT /api/admin/categories/reorder
 router.put("/categories/reorder", adminOnly, async (req, res) => {
   try {
-    const { order } = req.body; // [{id, sort_order}, ...]
+    const { order } = req.body;
     for (const item of order)
       await db.query("UPDATE categories SET sort_order=? WHERE id=?", [
         item.sort_order,
@@ -341,7 +406,8 @@ router.put("/categories/reorder", adminOnly, async (req, res) => {
 
 router.get("/orders", adminOnly, async (req, res) => {
   try {
-    const { status, search } = req.query;
+    const { status, search, page = 1, limit = 50 } = req.query;
+    const offset = (page - 1) * limit;
     let where = [];
     let params = [];
     if (status) {
@@ -354,13 +420,39 @@ router.get("/orders", adminOnly, async (req, res) => {
     }
     const whereStr = where.length ? "WHERE " + where.join(" AND ") : "";
     const [rows] = await db.query(
-      `SELECT o.* FROM orders o ${whereStr} ORDER BY o.created_at DESC LIMIT 100`,
+      `SELECT o.* FROM orders o ${whereStr} ORDER BY o.created_at DESC LIMIT ? OFFSET ?`,
+      [...params, +limit, +offset],
+    );
+    const [[{ total }]] = await db.query(
+      `SELECT COUNT(*) AS total FROM orders o ${whereStr}`,
       params,
     );
-    const [[counts]] = await db
-      .query(`SELECT status, COUNT(*) AS cnt FROM orders GROUP BY status`)
-      .catch(() => [[{}]]);
-    res.json({ data: rows, counts });
+    res.json({ data: rows, total });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/orders/:id — деталі замовлення з товарами
+router.get("/orders/:id", adminOnly, async (req, res) => {
+  try {
+    const [[order]] = await db.query("SELECT * FROM orders WHERE id=?", [
+      req.params.id,
+    ]);
+    if (!order)
+      return res.status(404).json({ error: "Замовлення не знайдено" });
+
+    // Якщо є таблиця order_items
+    const [items] = await db
+      .query(
+        `SELECT oi.*, p.name, p.emoji, p.image_url
+       FROM order_items oi LEFT JOIN products p ON p.id = oi.product_id
+       WHERE oi.order_id = ?`,
+        [req.params.id],
+      )
+      .catch(() => [[]]);
+
+    res.json({ ...order, items });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -394,10 +486,13 @@ router.patch("/orders/:id/status", adminOnly, async (req, res) => {
 
 router.get("/reviews", adminOnly, async (req, res) => {
   try {
+    const { page = 1, limit = 100 } = req.query;
+    const offset = (page - 1) * limit;
     const [rows] = await db.query(
-      `SELECT r.*, p.name AS product_name, p.emoji
+      `SELECT r.*, p.name AS product_name, p.emoji, p.id AS pid
        FROM reviews r LEFT JOIN products p ON p.id = r.product_id
-       ORDER BY r.created_at DESC LIMIT 100`,
+       ORDER BY r.created_at DESC LIMIT ? OFFSET ?`,
+      [+limit, +offset],
     );
     res.json(rows);
   } catch (err) {
@@ -421,6 +516,29 @@ router.delete("/reviews/:id", adminOnly, async (req, res) => {
       );
     }
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+// DASHBOARD STATS
+// ════════════════════════════════════════════════════════════
+
+router.get("/stats", adminOnly, async (req, res) => {
+  try {
+    const [[products]] = await db.query(
+      `SELECT COUNT(*) AS total, SUM(is_active=1) AS active,
+              SUM(stock=0) AS out_of_stock FROM products`,
+    );
+    const [[orders]] = await db.query(
+      `SELECT COUNT(*) AS total,
+              SUM(status='pending') AS pending,
+              COALESCE(SUM(total_amount),0) AS revenue
+       FROM orders`,
+    );
+    const [[reviews]] = await db.query("SELECT COUNT(*) AS total FROM reviews");
+    res.json({ products, orders, reviews });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

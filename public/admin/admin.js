@@ -1,5 +1,11 @@
 /* ═══════════════════════════════════════════════════════════
-   PawShop Admin Panel JS
+   PawShop Admin Panel JS — v2
+   Виправлення:
+   • Редагування неактивних товарів (тепер через /api/admin/products/:id)
+   • Дебаунс пошуку для замовлень
+   • Toast при зміні статусу замовлення
+   • Деталі замовлення у модалці
+   • Очищення форми при відкритті для нового товару
 ══════════════════════════════════════════════════════════ */
 
 const API = "/api";
@@ -14,8 +20,6 @@ let searchTimer;
 async function admApi(path, opts = {}) {
   const headers = { "Content-Type": "application/json" };
   if (admToken) headers["Authorization"] = `Bearer ${admToken}`;
-
-  // Якщо FormData — прибираємо Content-Type (браузер сам виставить multipart)
   if (opts.body instanceof FormData) delete headers["Content-Type"];
 
   const res = await fetch(API + path, { headers, ...opts });
@@ -53,7 +57,6 @@ async function adminLogin() {
       body: JSON.stringify({ email, password }),
     });
     if (data.user.role !== "admin") throw new Error("Ви не є адміністратором");
-
     admToken = data.token;
     admUser = data.user;
     localStorage.setItem("pawshop_admin_token", admToken);
@@ -85,16 +88,13 @@ function showErr(el, msg) {
 function bootAdmin() {
   document.getElementById("authGate").style.display = "none";
   document.getElementById("adminApp").style.display = "grid";
-
   document.getElementById("admName").textContent = admUser?.name || "Admin";
   document.getElementById("admEmail").textContent = admUser?.email || "";
   document.getElementById("admAvatar").textContent = (admUser?.name || "A")
     .charAt(0)
     .toUpperCase();
 
-  // Перевірити query param ?edit=
   const editId = new URLSearchParams(location.search).get("edit");
-
   loadCategories().then(() => {
     loadProducts();
     if (editId) openProductForm(+editId);
@@ -144,7 +144,6 @@ async function loadProducts() {
     renderProductsTable(data.data);
     renderProductStats(data.stats);
     renderProductsPagination(data.total);
-
     document.getElementById("productsSubtitle").textContent =
       `Всього товарів: ${data.total}`;
     document.getElementById("navCountProducts").textContent =
@@ -187,7 +186,7 @@ function renderProductsTable(products) {
       <td>
         <div class="prod-cell">
           <div class="prod-cell__emoji">
-            ${p.image_url ? `<img src="${p.image_url}" alt="">` : p.emoji || "🐾"}
+            ${p.image_url ? `<img src="${p.image_url}" alt="" loading="lazy">` : p.emoji || "🐾"}
           </div>
           <div>
             <div class="prod-cell__name" title="${esc(p.name)}">${esc(p.name)}</div>
@@ -207,7 +206,7 @@ function renderProductsTable(products) {
         </div>
       </td>
       <td>
-        <span class="stars" style="color:#f59e0b;font-size:.9rem">${"★".repeat(Math.round(+p.rating))}${"☆".repeat(5 - Math.round(+p.rating))}</span>
+        <span style="color:#f59e0b;font-size:.9rem">${"★".repeat(Math.round(+p.rating))}${"☆".repeat(5 - Math.round(+p.rating))}</span>
         <span style="color:var(--muted);font-size:.75rem"> ${(+p.rating).toFixed(1)}</span>
       </td>
       <td>
@@ -283,7 +282,18 @@ async function bulkAction(action) {
     deactivate: "деактивувати",
     delete: "видалити",
   };
-  if (!confirm(`${labels[action]} ${ids.length} товарів?`)) return;
+  if (
+    action === "delete" &&
+    !confirm(
+      `Ви впевнені що хочете ВИДАЛИТИ ${ids.length} товарів?\nЦю дію неможливо скасувати!`,
+    )
+  )
+    return;
+  if (
+    action !== "delete" &&
+    !confirm(`${labels[action]} ${ids.length} товарів?`)
+  )
+    return;
   try {
     await admApi("/admin/products/bulk", {
       method: "POST",
@@ -299,7 +309,12 @@ async function bulkAction(action) {
 
 /* ─── Delete product ────────────────────────────────────── */
 async function deleteProduct(id, name) {
-  if (!confirm(`Видалити "${name}"? Дія незворотна.`)) return;
+  if (
+    !confirm(
+      `Видалити "${name}"?\nЦя дія видалить також зображення товару. Незворотно.`,
+    )
+  )
+    return;
   try {
     await admApi(`/admin/products/${id}`, { method: "DELETE" });
     admToast(`🗑️ "${name}" видалено`, "ok");
@@ -317,11 +332,7 @@ async function openProductForm(id = null) {
     : "Додати товар";
   document.getElementById("pf_id").value = id || "";
   document.getElementById("pf_image").value = "";
-  document.getElementById("fileDropInner").innerHTML = `
-    <span style="font-size:2rem">📷</span>
-    <p>Натисніть або перетягніть файл</p>
-    <small>JPG, PNG, WEBP · до 3MB</small>
-  `;
+  resetFileDrop();
 
   // Populate category select
   const catSel = document.getElementById("pf_category");
@@ -330,10 +341,9 @@ async function openProductForm(id = null) {
     .join("");
 
   if (id) {
+    // ВИПРАВЛЕННЯ: використовуємо адмінський ендпоінт, який повертає неактивні товари теж
     try {
-      const p = await admApi(`/admin/products?page=1&limit=1`);
-      // Отримуємо конкретний товар через публічний ендпоінт
-      const prod = await fetch(`/api/products/${id}`).then((r) => r.json());
+      const prod = await admApi(`/admin/products/${id}`);
       document.getElementById("pf_name").value = prod.name || "";
       document.getElementById("pf_desc").value = prod.description || "";
       document.getElementById("pf_price").value = prod.price || "";
@@ -350,9 +360,11 @@ async function openProductForm(id = null) {
         document.getElementById("fileDropInner").innerHTML =
           `<img src="${prod.image_url}" alt=""><p style="margin-top:8px;font-size:.75rem;color:var(--muted)">Натисніть щоб змінити</p>`;
       }
-    } catch (_) {}
+    } catch (err) {
+      admToast("Помилка завантаження товару: " + err.message, "err");
+    }
   } else {
-    // Clear
+    // Очищаємо поля для нового товару
     [
       "pf_name",
       "pf_desc",
@@ -360,8 +372,8 @@ async function openProductForm(id = null) {
       "pf_old_price",
       "pf_emoji",
       "pf_tag",
-    ].forEach((id) => {
-      document.getElementById(id).value = "";
+    ].forEach((fid) => {
+      document.getElementById(fid).value = "";
     });
     document.getElementById("pf_stock").value = 0;
     document.getElementById("pf_pet").value = "all";
@@ -369,6 +381,14 @@ async function openProductForm(id = null) {
   }
 
   document.getElementById("productFormModal").classList.add("open");
+}
+
+function resetFileDrop() {
+  document.getElementById("fileDropInner").innerHTML = `
+    <span style="font-size:2rem">📷</span>
+    <p>Натисніть або перетягніть файл</p>
+    <small>JPG, PNG, WEBP · до 3MB</small>
+  `;
 }
 
 function closeProductForm() {
@@ -386,7 +406,6 @@ function previewImage(input) {
   reader.readAsDataURL(file);
 }
 
-// Drag & drop support
 document.addEventListener("DOMContentLoaded", () => {
   const drop = document.getElementById("fileDrop");
   if (!drop) return;
@@ -423,8 +442,8 @@ async function submitProductForm() {
     showErr(errEl, "Назва обов'язкова");
     return;
   }
-  if (!price) {
-    showErr(errEl, "Ціна обов'язкова");
+  if (!price || +price <= 0) {
+    showErr(errEl, "Вкажіть коректну ціну");
     return;
   }
   if (!catId) {
@@ -512,7 +531,6 @@ async function loadCategories() {
     document.getElementById("navCountCategories").textContent =
       admCategories.length;
 
-    // Заповнити фільтр
     const pCat = document.getElementById("pCat");
     pCat.innerHTML =
       `<option value="">Всі категорії</option>` +
@@ -584,15 +602,21 @@ function autoSlug() {
   const name = document.getElementById("cf_name").value;
   const slug = name
     .toLowerCase()
-    .replace(/[іі]/g, "i")
-    .replace(/[аа]/g, "a")
-    .replace(/[ее]/g, "e")
-    .replace(/[оо]/g, "o")
-    .replace(/[уу]/g, "u")
+    .replace(/[іi]/g, "i")
+    .replace(/[аa]/g, "a")
+    .replace(/[еe]/g, "e")
+    .replace(/[оo]/g, "o")
+    .replace(/[уy]/g, "u")
+    .replace(/[ї]/g, "i")
+    .replace(/[є]/g, "ye")
+    .replace(/[ь]/g, "")
+    .replace(/[щ]/g, "shch")
+    .replace(/[ш]/g, "sh")
+    .replace(/[ч]/g, "ch")
+    .replace(/[ж]/g, "zh")
     .replace(/\s+/g, "-")
     .replace(/[^a-z0-9-]/g, "");
   if (!document.getElementById("cf_id").value)
-    // тільки для нових
     document.getElementById("cf_slug").value = slug;
 }
 
@@ -679,6 +703,7 @@ async function loadOrders() {
   }
 }
 
+// ВИПРАВЛЕННЯ: дебаунс для пошуку замовлень
 function debouncedLoadOrders() {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(loadOrders, 350);
@@ -693,10 +718,6 @@ function renderOrdersTable(orders) {
   const PAY = { card: "💳 Картою", cash: "💵 Готівка", online: "📱 Online" };
   body.innerHTML = orders
     .map((o) => {
-      const st = ORDER_STATUS[o.status] || {
-        label: o.status,
-        cls: "badge--gray",
-      };
       return `
       <tr>
         <td style="font-weight:600;color:var(--primary)">#${o.id}</td>
@@ -715,24 +736,121 @@ function renderOrdersTable(orders) {
           </select>
         </td>
         <td style="color:var(--muted)">${new Date(o.created_at).toLocaleDateString("uk-UA")}</td>
-        <td><a href="/api/orders/${o.id}" target="_blank" class="row-btn">↗ Деталі</a></td>
+        <td>
+          <button class="row-btn" onclick="openOrderDetails(${o.id})">↗ Деталі</button>
+        </td>
       </tr>
     `;
     })
     .join("");
 }
 
+// ВИПРАВЛЕННЯ: toast при зміні статусу + reload
 async function updateOrderStatus(id, status) {
   try {
     await admApi(`/admin/orders/${id}/status`, {
       method: "PATCH",
       body: JSON.stringify({ status }),
     });
-    admToast(`✅ Статус замовлення #${id} оновлено`, "ok");
+    admToast(
+      `✅ Статус замовлення #${id} → ${ORDER_STATUS[status]?.label || status}`,
+      "ok",
+    );
+    // Оновлюємо лічильник pending
     loadOrders();
   } catch (err) {
     admToast(err.message, "err");
   }
+}
+
+// Деталі замовлення у модалці
+async function openOrderDetails(id) {
+  try {
+    const order = await admApi(`/admin/orders/${id}`);
+    const modal = document.getElementById("orderDetailsModal");
+    const body = document.getElementById("orderDetailsBody");
+    document.getElementById("orderDetailsTitle").textContent =
+      `Замовлення #${order.id}`;
+
+    const PAY = { card: "💳 Картою", cash: "💵 Готівка", online: "📱 Online" };
+    const st = ORDER_STATUS[order.status] || { label: order.status };
+
+    body.innerHTML = `
+      <div class="order-details-grid">
+        <div>
+          <div class="od-label">Клієнт</div>
+          <div class="od-val">${esc(order.customer_name)}</div>
+        </div>
+        <div>
+          <div class="od-label">Email</div>
+          <div class="od-val">${esc(order.customer_email)}</div>
+        </div>
+        <div>
+          <div class="od-label">Телефон</div>
+          <div class="od-val">${esc(order.customer_phone || "—")}</div>
+        </div>
+        <div>
+          <div class="od-label">Оплата</div>
+          <div class="od-val">${PAY[order.payment_method] || order.payment_method}</div>
+        </div>
+        <div>
+          <div class="od-label">Статус</div>
+          <div class="od-val">${st.label}</div>
+        </div>
+        <div>
+          <div class="od-label">Сума</div>
+          <div class="od-val" style="color:var(--primary);font-weight:700">${fmtPrice(order.total_amount)}</div>
+        </div>
+        ${
+          order.delivery_address
+            ? `
+        <div style="grid-column:span 2">
+          <div class="od-label">Адреса доставки</div>
+          <div class="od-val">${esc(order.delivery_address)}</div>
+        </div>`
+            : ""
+        }
+        ${
+          order.comment
+            ? `
+        <div style="grid-column:span 2">
+          <div class="od-label">Коментар</div>
+          <div class="od-val" style="color:var(--muted)">${esc(order.comment)}</div>
+        </div>`
+            : ""
+        }
+      </div>
+
+      ${
+        order.items?.length
+          ? `
+        <div style="margin-top:20px">
+          <div class="od-label" style="margin-bottom:10px">Товари</div>
+          ${order.items
+            .map(
+              (item) => `
+            <div class="order-item-row">
+              <span>${item.emoji || "🐾"}</span>
+              <span style="flex:1">${esc(item.name || "Товар #" + item.product_id)}</span>
+              <span style="color:var(--muted)">${item.quantity} шт.</span>
+              <span style="font-weight:600">${fmtPrice(item.price * item.quantity)}</span>
+            </div>
+          `,
+            )
+            .join("")}
+        </div>
+      `
+          : ""
+      }
+    `;
+    modal.classList.add("open");
+  } catch (err) {
+    admToast("Помилка завантаження деталей: " + err.message, "err");
+  }
+}
+
+function closeOrderDetails() {
+  document.getElementById("orderDetailsModal").classList.remove("open");
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -754,7 +872,7 @@ async function loadReviews() {
         <td>
           <div style="display:flex;align-items:center;gap:6px">
             <span>${r.emoji || "🐾"}</span>
-            <span style="font-size:.8rem">${esc(r.product_name || "—")}</span>
+            <a href="/product/${r.pid}" target="_blank" style="font-size:.8rem;color:var(--blue);text-decoration:underline">${esc(r.product_name || "—")}</a>
           </div>
         </td>
         <td>${esc(r.author_name)}</td>
@@ -804,6 +922,7 @@ document.addEventListener("keydown", (e) => {
     closeProductForm();
     closeCategoryForm();
     closeStockModal();
+    closeOrderDetails();
   }
 });
 
@@ -811,7 +930,6 @@ document.addEventListener("keydown", (e) => {
    INIT
 ══════════════════════════════════════════════════════════ */
 if (admToken) {
-  // Перевірити токен
   fetch(`${API}/auth/me`, { headers: { Authorization: `Bearer ${admToken}` } })
     .then((r) => r.json())
     .then((data) => {

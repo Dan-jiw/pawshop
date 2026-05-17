@@ -44,8 +44,14 @@ const getImgPath = (path) => {
 // Перевіряє чи це URL зображення (а не emoji)
 const isImageUrl = (val) => {
   if (!val) return false;
+
+  const valueStr = String(val).trim();
+
   return (
-    val.startsWith("http") || val.startsWith("/uploads") || val.includes(".")
+    valueStr.startsWith("http") || // Перехопить Cloudinary та будь-які зовнішні лінки
+    valueStr.includes("cloudinary.com") || // Захисна перевірка суто під Cloudinary
+    valueStr.startsWith("/uploads") || // Локальні завантаження
+    valueStr.includes(".") // Наявність розширення файлу (.jpg, .png тощо)
   );
 };
 

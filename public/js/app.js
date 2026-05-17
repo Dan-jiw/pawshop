@@ -1,5 +1,9 @@
 /* ═══════════════════════════════════════════════════════════
-   PawShop — Frontend JS
+   PawShop — Frontend JS v2
+   Фікси:
+   • getImgPath не ламає Cloudinary URLs
+   • addToCart передає image_url замість emoji для зображень
+   • Кошик правильно показує зображення
 ══════════════════════════════════════════════════════════ */
 
 const API = "/api";
@@ -27,10 +31,22 @@ const state = {
   paymentMethod: "card",
 };
 
+/* ─── Image helper ───────────────────────────────────────── */
+// ВИПРАВЛЕННЯ: не ламаємо Cloudinary URLs
 const getImgPath = (path) => {
   if (!path) return null;
+  // Повний URL (Cloudinary або інший) — повертаємо як є
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  // Локальний шлях — додаємо / якщо нема
   return path.startsWith("/") ? path : `/${path}`;
+};
+
+// Перевіряє чи це URL зображення (а не emoji)
+const isImageUrl = (val) => {
+  if (!val) return false;
+  return (
+    val.startsWith("http") || val.startsWith("/uploads") || val.includes(".")
+  );
 };
 
 /* ─── API helper ─────────────────────────────────────────── */
@@ -93,7 +109,6 @@ document.getElementById("searchToggle").addEventListener("click", () => {
 });
 document.getElementById("searchClose").addEventListener("click", () => {
   document.getElementById("searchBar").classList.remove("open");
-  // очищаємо пошук при закритті
   state.filters.search = "";
   document.getElementById("searchInput").value = "";
 });
@@ -104,7 +119,6 @@ document.getElementById("searchInput").addEventListener("input", (e) => {
   searchTimer = setTimeout(() => {
     state.filters.search = e.target.value.trim();
     state.page = 1;
-    // відкриваємо сторінку магазину і завантажуємо з пошуком
     document
       .querySelectorAll(".page")
       .forEach((p) => p.classList.remove("active"));
@@ -131,11 +145,11 @@ function renderHomeCategories() {
   grid.innerHTML = state.categories
     .map(
       (c) => `
-      <div class="category-card" onclick="filterByCategory('${c.slug}')">
-        <span class="category-card__icon">${c.icon}</span>
-        <div class="category-card__name">${c.name}</div>
-        <div class="category-card__count">${c.product_count} товарів</div>
-      </div>`,
+    <div class="category-card" onclick="filterByCategory('${c.slug}')">
+      <span class="category-card__icon">${c.icon}</span>
+      <div class="category-card__name">${c.name}</div>
+      <div class="category-card__count">${c.product_count} товарів</div>
+    </div>`,
     )
     .join("");
 }
@@ -147,10 +161,10 @@ function renderFilterCategories() {
     state.categories
       .map(
         (c) => `
-        <label class="filter-radio">
-          <input type="radio" name="cat" value="${c.slug}" ${state.filters.category === c.slug ? "checked" : ""}>
-          ${c.icon} ${c.name}
-        </label>`,
+      <label class="filter-radio">
+        <input type="radio" name="cat" value="${c.slug}" ${state.filters.category === c.slug ? "checked" : ""}>
+        ${c.icon} ${c.name}
+      </label>`,
       )
       .join("");
 }
@@ -167,7 +181,6 @@ function filterByCategory(slug) {
 function renderActiveTags() {
   const container = document.getElementById("activeTags");
   if (!container) return;
-
   const tags = [];
 
   if (state.filters.search) {
@@ -206,9 +219,8 @@ function renderActiveTags() {
     });
   }
   if (state.filters.minPrice || state.filters.maxPrice) {
-    const label = `💰 ${state.filters.minPrice || 0} – ${state.filters.maxPrice || "∞"} ₴`;
     tags.push({
-      label,
+      label: `💰 ${state.filters.minPrice || 0} – ${state.filters.maxPrice || "∞"} ₴`,
       clear: () => {
         state.filters.minPrice = "";
         state.filters.maxPrice = "";
@@ -235,20 +247,18 @@ function renderActiveTags() {
   container.innerHTML = tags
     .map(
       (t, i) => `
-      <span class="filter-tag">
-        ${t.label}
-        <button onclick="clearTag(${i})" title="Прибрати">✕</button>
-      </span>`,
+    <span class="filter-tag">
+      ${t.label}
+      <button onclick="clearTag(${i})" title="Прибрати">✕</button>
+    </span>`,
     )
     .join("");
-
-  // зберігаємо функції очищення
   container._clearFns = tags.map((t) => t.clear);
 }
 
 function clearTag(i) {
   const container = document.getElementById("activeTags");
-  if (container._clearFns && container._clearFns[i]) {
+  if (container._clearFns?.[i]) {
     container._clearFns[i]();
     state.page = 1;
     loadShopProducts();
@@ -293,15 +303,12 @@ async function loadShopProducts() {
     const data = await api(`/products?${params}`);
     state.products = data.data;
     state.totalProducts = data.total;
-
-    // оновлюємо діапазон цін якщо прийшов
     if (data.priceRange) {
       state.priceRange = data.priceRange;
       initPriceRange(data.priceRange);
     }
-
-    const count = document.getElementById("shopCount");
-    count.textContent = `Знайдено ${data.total} товарів`;
+    document.getElementById("shopCount").textContent =
+      `Знайдено ${data.total} товарів`;
 
     if (!data.data.length) {
       grid.innerHTML = `
@@ -331,31 +338,32 @@ function renderProductCards(products, container) {
   container.innerHTML = products
     .map(
       (p) => `
-      <div class="product-card" onclick="openProduct(${p.id})">
-        ${p.tag ? `<div class="product-card__tag ${["Новинка", "Акція"].includes(p.tag) ? "green" : ""}">${p.tag}</div>` : ""}
-        <div class="product-card__thumb">
-          ${
-            p.image_url
-              ? `<img src="${getImgPath(p.image_url)}" alt="${p.name}" class="product-card__img" onerror="this.src='/img/no-photo.png'">`
-              : p.emoji || "🐾"
-          }
+    <div class="product-card" onclick="openProduct(${p.id})">
+      ${p.tag ? `<div class="product-card__tag ${["Новинка", "Акція"].includes(p.tag) ? "green" : ""}">${p.tag}</div>` : ""}
+      <div class="product-card__thumb">
+        ${
+          p.image_url
+            ? `<img src="${getImgPath(p.image_url)}" alt="${escapeHtml(p.name)}" class="product-card__img" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+            : ""
+        }
+        <span class="product-card__emoji" style="${p.image_url ? "display:none" : ""}">${p.emoji || "🐾"}</span>
+      </div>
+      <div class="product-card__body">
+        <div class="product-card__category">${p.category_name || ""}</div>
+        <div class="product-card__name">${p.name}</div>
+        <div class="product-card__rating">
+          <span class="stars">${renderStars(p.rating)}</span>
+          <span>${(+p.rating).toFixed(1)} (${p.reviews_count})</span>
         </div>
-        <div class="product-card__body">
-          <div class="product-card__category">${p.category_name || ""}</div>
-          <div class="product-card__name">${p.name}</div>
-          <div class="product-card__rating">
-            <span class="stars">${renderStars(p.rating)}</span>
-            <span>${(+p.rating).toFixed(1)} (${p.reviews_count})</span>
+        <div class="product-card__footer">
+          <div>
+            <div class="product-card__price">${formatPrice(p.price)}</div>
+            ${p.old_price ? `<div class="product-card__old-price">${formatPrice(p.old_price)}</div>` : ""}
           </div>
-          <div class="product-card__footer">
-            <div>
-              <div class="product-card__price">${formatPrice(p.price)}</div>
-              ${p.old_price ? `<div class="product-card__old-price">${formatPrice(p.old_price)}</div>` : ""}
-            </div>
-            <button class="add-btn" onclick="event.stopPropagation();addToCart(${p.id},'${escHtml(p.name)}',${p.price},'${p.image_url || p.emoji || "🐾"}')" title="Додати до кошика">+</button>
-          </div>
+          <button class="add-btn" onclick="event.stopPropagation();addToCart(${p.id},'${escHtml(p.name)}',${p.price},'${escHtml(p.image_url || p.emoji || "🐾")}')" title="Додати до кошика">+</button>
         </div>
-      </div>`,
+      </div>
+    </div>`,
     )
     .join("");
 }
@@ -368,10 +376,12 @@ function formatPrice(n) {
   return (+n).toLocaleString("uk-UA") + " ₴";
 }
 function escHtml(s) {
-  return String(s).replace(/'/g, "\\'");
+  return String(s || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'");
 }
 function escapeHtml(s) {
-  return String(s)
+  return String(s || "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -430,8 +440,8 @@ function renderProductModal(p) {
       <div class="product-modal__emoji">
         ${
           p.image_url
-            ? `<img src="${getImgPath(p.image_url)}" alt="${p.name}" class="product-modal__img">`
-            : p.emoji || "🐾"
+            ? `<img src="${getImgPath(p.image_url)}" alt="${escapeHtml(p.name)}" class="product-modal__img">`
+            : `<span style="font-size:4rem">${p.emoji || "🐾"}</span>`
         }
       </div>
       <div>
@@ -493,7 +503,8 @@ function changeQty(delta) {
 function addToCartQty() {
   const p = state.currentProduct;
   if (!p) return;
-  addToCart(p.id, p.name, p.price, p.emoji || "🐾", state.qty);
+  // ВИПРАВЛЕННЯ: передаємо image_url якщо є, інакше emoji
+  addToCart(p.id, p.name, p.price, p.image_url || p.emoji || "🐾", state.qty);
   closeModal("productModal");
 }
 function setReviewRating(val) {
@@ -528,10 +539,17 @@ async function submitReview(productId) {
 }
 
 /* ─── Cart ──────────────────────────────────────────────── */
-function addToCart(productId, name, price, emoji, qty = 1) {
+function addToCart(productId, name, price, imageOrEmoji, qty = 1) {
   const existing = state.cart.find((i) => i.productId === productId);
   if (existing) existing.qty += qty;
-  else state.cart.push({ productId, name, price: +price, emoji, qty });
+  else
+    state.cart.push({
+      productId,
+      name,
+      price: +price,
+      image: imageOrEmoji,
+      qty,
+    });
   saveCart();
   renderCartBadge();
   toast(`✓ ${name} додано до кошика`, "success");
@@ -558,6 +576,14 @@ document.getElementById("closeCart").addEventListener("click", closeCart);
 document.getElementById("drawerOverlay").addEventListener("click", closeCart);
 document.getElementById("checkoutBtn").addEventListener("click", openCheckout);
 
+function renderCartThumb(image) {
+  if (!image) return `<span style="font-size:1.8rem">🐾</span>`;
+  if (isImageUrl(image)) {
+    return `<img src="${getImgPath(image)}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:8px" onerror="this.style.display='none'">`;
+  }
+  return `<span style="font-size:1.8rem">${image}</span>`;
+}
+
 function renderCartDrawer() {
   const body = document.getElementById("cartItems");
   const foot = document.getElementById("cartFoot");
@@ -572,11 +598,7 @@ function renderCartDrawer() {
       (item) => `
     <div class="cart-item">
       <div class="cart-item__emoji">
-        ${
-          item.emoji && item.emoji.includes(".")
-            ? `<img src="${getImgPath(item.emoji)}" width="40">`
-            : item.emoji || "🐾"
-        }
+        ${renderCartThumb(item.image || item.emoji)}
       </div>
       <div class="cart-item__info">
         <div class="cart-item__name">${escapeHtml(item.name)}</div>
@@ -630,7 +652,14 @@ function renderCheckoutForm() {
           .map(
             (i) => `
           <div class="summary-item">
-            <span>${i.emoji && i.emoji.includes(".") ? `<img src="${getImgPath(i.emoji)}" width="30" style="vertical-align:middle;margin-right:8px;border-radius:4px;">` : `<span style="margin-right:8px;">${i.emoji || "🐾"}</span>`}${escapeHtml(i.name)} ×${i.qty}</span>
+            <span>
+              ${
+                isImageUrl(i.image || i.emoji)
+                  ? `<img src="${getImgPath(i.image || i.emoji)}" width="30" style="vertical-align:middle;margin-right:8px;border-radius:4px;object-fit:cover">`
+                  : `<span style="margin-right:8px">${i.image || i.emoji || "🐾"}</span>`
+              }
+              ${escapeHtml(i.name)} ×${i.qty}
+            </span>
             <span>${formatPrice(i.price * i.qty)}</span>
           </div>`,
           )

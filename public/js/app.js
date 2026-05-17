@@ -1,6 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
    PawShop — Frontend JS
-   Підключається до Node.js/Express + MySQL API
 ══════════════════════════════════════════════════════════ */
 
 const API = "/api";
@@ -10,10 +9,18 @@ const state = {
   cart: JSON.parse(localStorage.getItem("pawshop_cart") || "[]"),
   products: [],
   categories: [],
-  filters: { category: "", pet: "", search: "" },
+  filters: {
+    category: "",
+    pet: "",
+    search: "",
+    minPrice: "",
+    maxPrice: "",
+    minRating: "",
+  },
   sort: "id|ASC",
   page: 1,
   totalProducts: 0,
+  priceRange: { minPrice: 0, maxPrice: 10000 },
   currentProduct: null,
   qty: 1,
   reviewRating: 0,
@@ -22,13 +29,11 @@ const state = {
 
 const getImgPath = (path) => {
   if (!path) return null;
-  // Якщо шлях вже має 'uploads', просто додаємо один слеш на початок
-  // Якщо немає - додаємо /uploads/
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
   return cleanPath.replace("//", "/");
 };
 
-/* ─── API helpers ────────────────────────────────────────── */
+/* ─── API helper ─────────────────────────────────────────── */
 async function api(path, opts = {}) {
   try {
     const res = await fetch(API + path, {
@@ -88,14 +93,27 @@ document.getElementById("searchToggle").addEventListener("click", () => {
 });
 document.getElementById("searchClose").addEventListener("click", () => {
   document.getElementById("searchBar").classList.remove("open");
+  // очищаємо пошук при закритті
+  state.filters.search = "";
+  document.getElementById("searchInput").value = "";
 });
+
 let searchTimer;
 document.getElementById("searchInput").addEventListener("input", (e) => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
     state.filters.search = e.target.value.trim();
     state.page = 1;
-    showPage("shop");
+    // відкриваємо сторінку магазину і завантажуємо з пошуком
+    document
+      .querySelectorAll(".page")
+      .forEach((p) => p.classList.remove("active"));
+    document.getElementById("page-shop").classList.add("active");
+    document.querySelectorAll(".nav__link").forEach((l) => {
+      l.classList.toggle("active", l.dataset.page === "shop");
+    });
+    loadShopProducts();
+    renderActiveTags();
   }, 400);
 });
 
@@ -113,12 +131,11 @@ function renderHomeCategories() {
   grid.innerHTML = state.categories
     .map(
       (c) => `
-    <div class="category-card" onclick="filterByCategory('${c.slug}')">
-      <span class="category-card__icon">${c.icon}</span>
-      <div class="category-card__name">${c.name}</div>
-      <div class="category-card__count">${c.product_count} товарів</div>
-    </div>
-  `,
+      <div class="category-card" onclick="filterByCategory('${c.slug}')">
+        <span class="category-card__icon">${c.icon}</span>
+        <div class="category-card__name">${c.name}</div>
+        <div class="category-card__count">${c.product_count} товарів</div>
+      </div>`,
     )
     .join("");
 }
@@ -130,11 +147,10 @@ function renderFilterCategories() {
     state.categories
       .map(
         (c) => `
-      <label class="filter-radio">
-        <input type="radio" name="cat" value="${c.slug}" ${state.filters.category === c.slug ? "checked" : ""}>
-        ${c.icon} ${c.name}
-      </label>
-    `,
+        <label class="filter-radio">
+          <input type="radio" name="cat" value="${c.slug}" ${state.filters.category === c.slug ? "checked" : ""}>
+          ${c.icon} ${c.name}
+        </label>`,
       )
       .join("");
 }
@@ -144,6 +160,107 @@ function filterByCategory(slug) {
   state.page = 1;
   showPage("shop");
   renderFilterCategories();
+  renderActiveTags();
+}
+
+/* ─── Active filter tags ─────────────────────────────────── */
+function renderActiveTags() {
+  const container = document.getElementById("activeTags");
+  if (!container) return;
+
+  const tags = [];
+
+  if (state.filters.search) {
+    tags.push({
+      label: `🔍 "${state.filters.search}"`,
+      clear: () => {
+        state.filters.search = "";
+        document.getElementById("searchInput").value = "";
+      },
+    });
+  }
+  if (state.filters.category) {
+    const cat = state.categories.find((c) => c.slug === state.filters.category);
+    tags.push({
+      label: `${cat?.icon || ""} ${cat?.name || state.filters.category}`,
+      clear: () => {
+        state.filters.category = "";
+        renderFilterCategories();
+      },
+    });
+  }
+  if (state.filters.pet) {
+    const PET_LABELS = {
+      cat: "🐱 Коти",
+      dog: "🐶 Собаки",
+      bird: "🦜 Птахи",
+      fish: "🐠 Рибки",
+      rabbit: "🐇 Гризуни",
+    };
+    tags.push({
+      label: PET_LABELS[state.filters.pet] || state.filters.pet,
+      clear: () => {
+        state.filters.pet = "";
+        document.querySelector('input[name="pet"][value=""]').checked = true;
+      },
+    });
+  }
+  if (state.filters.minPrice || state.filters.maxPrice) {
+    const label = `💰 ${state.filters.minPrice || 0} – ${state.filters.maxPrice || "∞"} ₴`;
+    tags.push({
+      label,
+      clear: () => {
+        state.filters.minPrice = "";
+        state.filters.maxPrice = "";
+        updatePriceInputs();
+      },
+    });
+  }
+  if (state.filters.minRating) {
+    tags.push({
+      label: `⭐ від ${state.filters.minRating}`,
+      clear: () => {
+        state.filters.minRating = "";
+        document.querySelector('input[name="rating"][value=""]').checked = true;
+      },
+    });
+  }
+
+  if (!tags.length) {
+    container.style.display = "none";
+    return;
+  }
+
+  container.style.display = "flex";
+  container.innerHTML = tags
+    .map(
+      (t, i) => `
+      <span class="filter-tag">
+        ${t.label}
+        <button onclick="clearTag(${i})" title="Прибрати">✕</button>
+      </span>`,
+    )
+    .join("");
+
+  // зберігаємо функції очищення
+  container._clearFns = tags.map((t) => t.clear);
+}
+
+function clearTag(i) {
+  const container = document.getElementById("activeTags");
+  if (container._clearFns && container._clearFns[i]) {
+    container._clearFns[i]();
+    state.page = 1;
+    loadShopProducts();
+    renderActiveTags();
+  }
+}
+
+function updatePriceInputs() {
+  const minEl = document.getElementById("priceMin");
+  const maxEl = document.getElementById("priceMax");
+  if (minEl) minEl.value = state.filters.minPrice || "";
+  if (maxEl) maxEl.value = state.filters.maxPrice || "";
 }
 
 /* ─── Products ───────────────────────────────────────────── */
@@ -167,6 +284,9 @@ async function loadShopProducts() {
     ...(state.filters.category && { category: state.filters.category }),
     ...(state.filters.pet && { pet: state.filters.pet }),
     ...(state.filters.search && { search: state.filters.search }),
+    ...(state.filters.minPrice && { minPrice: state.filters.minPrice }),
+    ...(state.filters.maxPrice && { maxPrice: state.filters.maxPrice }),
+    ...(state.filters.minRating && { minRating: state.filters.minRating }),
   });
 
   try {
@@ -174,14 +294,22 @@ async function loadShopProducts() {
     state.products = data.data;
     state.totalProducts = data.total;
 
+    // оновлюємо діапазон цін якщо прийшов
+    if (data.priceRange) {
+      state.priceRange = data.priceRange;
+      initPriceRange(data.priceRange);
+    }
+
     const count = document.getElementById("shopCount");
     count.textContent = `Знайдено ${data.total} товарів`;
 
     if (!data.data.length) {
-      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:60px;color:var(--text-muted)">
-        <div style="font-size:3rem;margin-bottom:16px">🔍</div>
-        <p>Товарів за вашим запитом не знайдено</p>
-      </div>`;
+      grid.innerHTML = `
+        <div style="grid-column:1/-1;text-align:center;padding:60px;color:var(--text-muted)">
+          <div style="font-size:3rem;margin-bottom:16px">🔍</div>
+          <p>Товарів за вашим запитом не знайдено</p>
+          <button class="btn btn--outline" style="margin-top:16px" onclick="resetAllFilters()">Скинути фільтри</button>
+        </div>`;
     } else {
       renderProductCards(data.data, grid);
     }
@@ -189,36 +317,45 @@ async function loadShopProducts() {
   } catch (_) {}
 }
 
+function initPriceRange(range) {
+  const minEl = document.getElementById("priceMin");
+  const maxEl = document.getElementById("priceMax");
+  if (!minEl || !maxEl) return;
+  if (!minEl.placeholder) {
+    minEl.placeholder = `від ${Math.floor(range.minPrice)} ₴`;
+    maxEl.placeholder = `до ${Math.ceil(range.maxPrice)} ₴`;
+  }
+}
+
 function renderProductCards(products, container) {
   container.innerHTML = products
     .map(
       (p) => `
-    <div class="product-card" onclick="openProduct(${p.id})">
-      ${p.tag ? `<div class="product-card__tag ${["Новинка", "Акція"].includes(p.tag) ? "green" : ""}">${p.tag}</div>` : ""}
-      <div class="product-card__thumb">
-        ${
-          p.image_url
-            ? `<img src="${getImgPath(p.image_url)}" alt="${p.name}" class="product-card__img" onerror="this.src='/img/no-photo.png'">`
-            : p.emoji || "🐾"
-        }
-      </div>
-      <div class="product-card__body">
-        <div class="product-card__category">${p.category_name || ""}</div>
-        <div class="product-card__name">${p.name}</div>
-        <div class="product-card__rating">
-          <span class="stars">${renderStars(p.rating)}</span>
-          <span>${(+p.rating).toFixed(1)} (${p.reviews_count})</span>
+      <div class="product-card" onclick="openProduct(${p.id})">
+        ${p.tag ? `<div class="product-card__tag ${["Новинка", "Акція"].includes(p.tag) ? "green" : ""}">${p.tag}</div>` : ""}
+        <div class="product-card__thumb">
+          ${
+            p.image_url
+              ? `<img src="${getImgPath(p.image_url)}" alt="${p.name}" class="product-card__img" onerror="this.src='/img/no-photo.png'">`
+              : p.emoji || "🐾"
+          }
         </div>
-        <div class="product-card__footer">
-          <div>
-            <div class="product-card__price">${formatPrice(p.price)}</div>
-            ${p.old_price ? `<div class="product-card__old-price">${formatPrice(p.old_price)}</div>` : ""}
+        <div class="product-card__body">
+          <div class="product-card__category">${p.category_name || ""}</div>
+          <div class="product-card__name">${p.name}</div>
+          <div class="product-card__rating">
+            <span class="stars">${renderStars(p.rating)}</span>
+            <span>${(+p.rating).toFixed(1)} (${p.reviews_count})</span>
           </div>
-          <button class="add-btn" onclick="event.stopPropagation();addToCart(${p.id},'${escHtml(p.name)}',${p.price},'${p.image_url || p.emoji || "🐾"}')">+</button>
+          <div class="product-card__footer">
+            <div>
+              <div class="product-card__price">${formatPrice(p.price)}</div>
+              ${p.old_price ? `<div class="product-card__old-price">${formatPrice(p.old_price)}</div>` : ""}
+            </div>
+            <button class="add-btn" onclick="event.stopPropagation();addToCart(${p.id},'${escHtml(p.name)}',${p.price},'${p.image_url || p.emoji || "🐾"}')" title="Додати до кошика">+</button>
+          </div>
         </div>
-      </div>
-    </div>
-  `,
+      </div>`,
     )
     .join("");
 }
@@ -233,6 +370,25 @@ function formatPrice(n) {
 function escHtml(s) {
   return String(s).replace(/'/g, "\\'");
 }
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+function petLabel(t) {
+  return (
+    {
+      cat: "🐱 Коти",
+      dog: "🐶 Собаки",
+      bird: "🦜 Птахи",
+      fish: "🐠 Рибки",
+      rabbit: "🐇 Гризуни",
+      all: "🐾 Всі",
+    }[t] || t
+  );
+}
 
 /* ─── Pagination ────────────────────────────────────────── */
 function renderPagination(total, limit) {
@@ -244,9 +400,8 @@ function renderPagination(total, limit) {
   }
   el.innerHTML = Array.from(
     { length: pages },
-    (_, i) => `
-    <button class="page-btn${state.page === i + 1 ? " active" : ""}" onclick="goPage(${i + 1})">${i + 1}</button>
-  `,
+    (_, i) =>
+      `<button class="page-btn${state.page === i + 1 ? " active" : ""}" onclick="goPage(${i + 1})">${i + 1}</button>`,
   ).join("");
 }
 function goPage(n) {
@@ -272,13 +427,13 @@ function renderProductModal(p) {
   box.innerHTML = `
     <button class="btn-icon" style="position:absolute;top:16px;right:16px;z-index:1" onclick="closeModal('productModal')">✕</button>
     <div class="product-modal__inner">
-        <div class="product-modal__emoji">
-          ${
-            p.image_url
-              ? `<img src="${getImgPath(p.image_url)}" alt="${p.name}" class="product-modal__img">`
-              : p.emoji || "🐾"
-          }
-        </div>
+      <div class="product-modal__emoji">
+        ${
+          p.image_url
+            ? `<img src="${getImgPath(p.image_url)}" alt="${p.name}" class="product-modal__img">`
+            : p.emoji || "🐾"
+        }
+      </div>
       <div>
         <div style="font-size:.8rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">${p.category_name || ""}</div>
         <div class="product-modal__name">${p.name}</div>
@@ -313,8 +468,7 @@ function renderProductModal(p) {
           </div>
           ${r.comment ? `<p class="review-item__text">${escapeHtml(r.comment)}</p>` : ""}
           <small style="color:var(--text-muted);font-size:.75rem">${new Date(r.created_at).toLocaleDateString("uk-UA")}</small>
-        </div>
-      `,
+        </div>`,
           )
           .join("") ||
         '<p style="color:var(--text-muted);font-size:.9rem">Ще немає відгуків. Будьте першим!</p>'
@@ -328,27 +482,7 @@ function renderProductModal(p) {
         <textarea id="reviewComment" class="form-textarea" placeholder="Ваш відгук..."></textarea>
         <button class="btn btn--primary btn--sm" style="margin-top:10px" onclick="submitReview(${p.id})">Відправити</button>
       </div>
-    </div>
-  `;
-}
-
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-function petLabel(t) {
-  const m = {
-    cat: "🐱 Коти",
-    dog: "🐶 Собаки",
-    bird: "🦜 Птахи",
-    fish: "🐠 Рибки",
-    rabbit: "🐇 Гризуни",
-    all: "🐾 Всі",
-  };
-  return m[t] || t;
+    </div>`;
 }
 
 function changeQty(delta) {
@@ -356,21 +490,18 @@ function changeQty(delta) {
   state.qty = Math.max(1, Math.min(state.qty + delta, max));
   document.getElementById("qtyDisplay").textContent = state.qty;
 }
-
 function addToCartQty() {
   const p = state.currentProduct;
   if (!p) return;
   addToCart(p.id, p.name, p.price, p.emoji || "🐾", state.qty);
   closeModal("productModal");
 }
-
 function setReviewRating(val) {
   state.reviewRating = val;
   document
     .querySelectorAll(".star-pick")
     .forEach((s) => s.classList.toggle("active", +s.dataset.val <= val));
 }
-
 async function submitReview(productId) {
   const author = document.getElementById("reviewAuthor").value.trim();
   if (!author) {
@@ -392,32 +523,28 @@ async function submitReview(productId) {
       }),
     });
     toast("Дякуємо за відгук!", "success");
-    openProduct(productId); // reload
+    openProduct(productId);
   } catch (_) {}
 }
 
 /* ─── Cart ──────────────────────────────────────────────── */
 function addToCart(productId, name, price, emoji, qty = 1) {
   const existing = state.cart.find((i) => i.productId === productId);
-  if (existing) {
-    existing.qty += qty;
-  } else {
-    state.cart.push({ productId, name, price: +price, emoji, qty });
-  }
+  if (existing) existing.qty += qty;
+  else state.cart.push({ productId, name, price: +price, emoji, qty });
   saveCart();
   renderCartBadge();
   toast(`✓ ${name} додано до кошика`, "success");
 }
-
 function saveCart() {
   localStorage.setItem("pawshop_cart", JSON.stringify(state.cart));
 }
-
 function renderCartBadge() {
-  const total = state.cart.reduce((s, i) => s + i.qty, 0);
-  document.getElementById("cartBadge").textContent = total;
+  document.getElementById("cartBadge").textContent = state.cart.reduce(
+    (s, i) => s + i.qty,
+    0,
+  );
 }
-
 function openCart() {
   renderCartDrawer();
   document.getElementById("cartDrawer").classList.add("open");
@@ -434,13 +561,11 @@ document.getElementById("checkoutBtn").addEventListener("click", openCheckout);
 function renderCartDrawer() {
   const body = document.getElementById("cartItems");
   const foot = document.getElementById("cartFoot");
-
   if (!state.cart.length) {
     body.innerHTML = `<div class="cart-empty"><span class="cart-empty__icon">🛒</span><p>Кошик порожній</p><p style="margin-top:8px;font-size:.85rem">Додайте товари з каталогу</p></div>`;
     foot.style.display = "none";
     return;
   }
-
   const total = state.cart.reduce((s, i) => s + i.price * i.qty, 0);
   body.innerHTML = state.cart
     .map(
@@ -463,11 +588,9 @@ function renderCartDrawer() {
         <button onclick="updateCartQty(${item.productId}, 1)">+</button>
         <button onclick="removeFromCart(${item.productId})" style="color:#e74c3c;margin-left:4px">✕</button>
       </div>
-    </div>
-  `,
+    </div>`,
     )
     .join("");
-
   document.getElementById("cartTotal").textContent = formatPrice(total);
   foot.style.display = "block";
 }
@@ -483,7 +606,6 @@ function updateCartQty(productId, delta) {
     renderCartDrawer();
   }
 }
-
 function removeFromCart(productId) {
   state.cart = state.cart.filter((i) => i.productId !== productId);
   saveCart();
@@ -506,12 +628,11 @@ function renderCheckoutForm() {
         <h4>Ваше замовлення</h4>
         ${state.cart
           .map(
-            (i) => `<div class="summary-item"><span>${
-              i.emoji && i.emoji.includes(".")
-                ? `<img src="${getImgPath(i.emoji)}" width="30" style="vertical-align:middle; margin-right:8px; border-radius:4px;">`
-                : `<span style="margin-right:8px;">${i.emoji || "🐾"}</span>`
-            }
-      ${escapeHtml(i.name)} ×${i.qty}</span><span>${formatPrice(i.price * i.qty)}</span></div>`,
+            (i) => `
+          <div class="summary-item">
+            <span>${i.emoji && i.emoji.includes(".") ? `<img src="${getImgPath(i.emoji)}" width="30" style="vertical-align:middle;margin-right:8px;border-radius:4px;">` : `<span style="margin-right:8px;">${i.emoji || "🐾"}</span>`}${escapeHtml(i.name)} ×${i.qty}</span>
+            <span>${formatPrice(i.price * i.qty)}</span>
+          </div>`,
           )
           .join("")}
         <div class="summary-total"><span>Разом:</span><span>${formatPrice(total)}</span></div>
@@ -539,9 +660,9 @@ function renderCheckoutForm() {
       <div class="form-group">
         <label>Спосіб оплати</label>
         <div class="payment-options">
-          <div class="pay-opt selected" data-pay="card" onclick="selectPayment('card', this)">💳 Картою</div>
-          <div class="pay-opt" data-pay="cash" onclick="selectPayment('cash', this)">💵 Готівкою</div>
-          <div class="pay-opt" data-pay="online" onclick="selectPayment('online', this)">📱 Online</div>
+          <div class="pay-opt selected" onclick="selectPayment('card',this)">💳 Картою</div>
+          <div class="pay-opt" onclick="selectPayment('cash',this)">💵 Готівкою</div>
+          <div class="pay-opt" onclick="selectPayment('online',this)">📱 Online</div>
         </div>
       </div>
       <div class="form-group">
@@ -549,8 +670,7 @@ function renderCheckoutForm() {
         <input id="ch_notes" class="form-input" placeholder="Необов'язково..." />
       </div>
       <button class="btn btn--primary btn--full" onclick="placeOrder()">✓ Підтвердити замовлення</button>
-    </div>
-  `;
+    </div>`;
 }
 
 function selectPayment(method, el) {
@@ -562,26 +682,20 @@ function selectPayment(method, el) {
 }
 
 async function placeOrder() {
-
   try {
     const name = document.getElementById("ch_name").value.trim();
     const email = document.getElementById("ch_email").value.trim();
     const phone = document.getElementById("ch_phone").value.trim();
     const address = document.getElementById("ch_address").value.trim();
-    const notesEl = document.getElementById("ch_notes"); // Шукаємо поле коментаря
-    const notes = notesEl ? notesEl.value.trim() : "";
-
+    const notes = document.getElementById("ch_notes")?.value.trim() || "";
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    // Валідація
     if (name.length < 3) return toast("Введіть повне ім'я", "error");
     if (!emailRegex.test(email))
       return toast("Коректний email обов'язковий", "error");
     if (address.length < 10)
       return toast("Введіть повну адресу доставки", "error");
-    if (state.cart.length === 0) return toast("Кошик порожній", "error");
-
-    console.log("📦 Дані зібрано, відправляю на сервер...");
+    if (!state.cart.length) return toast("Кошик порожній", "error");
 
     const result = await api("/orders", {
       method: "POST",
@@ -591,21 +705,18 @@ async function placeOrder() {
         customer_phone: phone,
         delivery_address: address,
         payment_method: state.paymentMethod,
-        notes: notes,
+        notes,
         items: state.cart.map((i) => ({
           product_id: i.productId,
           quantity: i.qty,
-          price: i.price, // Додаємо ціну, бо сервер може її вимагати для запису в order_items
+          price: i.price,
         })),
       }),
     });
 
-    // Очищення
     state.cart = [];
     saveCart();
     renderCartBadge();
-
-    // Відображення успіху
     document.getElementById("checkoutContent").innerHTML = `
       <div class="order-success">
         <span class="order-success__icon">🎉</span>
@@ -614,10 +725,8 @@ async function placeOrder() {
         <p>Номер замовлення: <strong>#${result.order_id}</strong></p>
         <p style="margin-top:16px;font-size:.9rem;color:var(--text-muted)">Чекайте на дзвінок менеджера!</p>
         <button class="btn btn--primary" style="margin-top:24px" onclick="closeModal('checkoutModal');showPage('home')">На головну 🏠</button>
-      </div>
-    `;
+      </div>`;
   } catch (err) {
-    console.error("❌ ПОМИЛКА ПРИ ОФОРМЛЕННІ:", err);
     toast(err.message || "Сталася помилка при відправці", "error");
   }
 }
@@ -638,26 +747,48 @@ document
 
 /* ─── Shop filters ───────────────────────────────────────── */
 document.getElementById("applyFilters").addEventListener("click", () => {
-  const cat = document.querySelector('input[name="cat"]:checked')?.value || "";
-  const pet = document.querySelector('input[name="pet"]:checked')?.value || "";
-  const sort = document.getElementById("sortSelect").value;
-  state.filters.category = cat;
-  state.filters.pet = pet;
-  state.sort = sort;
+  state.filters.category =
+    document.querySelector('input[name="cat"]:checked')?.value || "";
+  state.filters.pet =
+    document.querySelector('input[name="pet"]:checked')?.value || "";
+  state.filters.minRating =
+    document.querySelector('input[name="rating"]:checked')?.value || "";
+  state.filters.minPrice = document.getElementById("priceMin")?.value || "";
+  state.filters.maxPrice = document.getElementById("priceMax")?.value || "";
+  state.sort = document.getElementById("sortSelect").value;
   state.page = 1;
   loadShopProducts();
+  renderActiveTags();
 });
 
-document.getElementById("resetFilters").addEventListener("click", () => {
-  state.filters = { category: "", pet: "", search: "" };
+function resetAllFilters() {
+  state.filters = {
+    category: "",
+    pet: "",
+    search: "",
+    minPrice: "",
+    maxPrice: "",
+    minRating: "",
+  };
   state.sort = "id|ASC";
   state.page = 1;
   document.querySelectorAll('input[name="cat"]')[0].checked = true;
   document.querySelectorAll('input[name="pet"]')[0].checked = true;
+  const ratingFirst = document.querySelector('input[name="rating"]');
+  if (ratingFirst) ratingFirst.checked = true;
   document.getElementById("sortSelect").value = "id|ASC";
+  const minEl = document.getElementById("priceMin");
+  const maxEl = document.getElementById("priceMax");
+  if (minEl) minEl.value = "";
+  if (maxEl) maxEl.value = "";
+  document.getElementById("searchInput").value = "";
   loadShopProducts();
-});
+  renderActiveTags();
+}
 
+document
+  .getElementById("resetFilters")
+  .addEventListener("click", resetAllFilters);
 document.getElementById("sortSelect").addEventListener("change", (e) => {
   state.sort = e.target.value;
   state.page = 1;
@@ -671,12 +802,13 @@ document.querySelectorAll(".view-btn").forEach((btn) => {
       .querySelectorAll(".view-btn")
       .forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
-    const grid = document.getElementById("shopProducts");
-    grid.classList.toggle("list-view", btn.dataset.view === "list");
+    document
+      .getElementById("shopProducts")
+      .classList.toggle("list-view", btn.dataset.view === "list");
   });
 });
 
-/* ─── Keyboard shortcuts ─────────────────────────────────── */
+/* ─── Keyboard ───────────────────────────────────────────── */
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     closeModal("productModal");

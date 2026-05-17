@@ -42,18 +42,21 @@ const getImgPath = (path) => {
 };
 
 // Перевіряє чи це URL зображення (а не emoji)
-const isImageUrl = (val) => {
-  if (!val) return false;
-  const valueStr = String(val).trim().toLowerCase();
+if (!val) return false;
+const valueStr = String(val).trim().toLowerCase();
 
-  if (
-    valueStr.startsWith("http") ||
-    valueStr.includes("cloudinary.com") ||
-    valueStr.startsWith("/uploads")
-  ) {
-    return true;
-  }
-};
+// Якщо це явне посилання
+if (
+  valueStr.startsWith("http") ||
+  valueStr.includes("cloudinary.com") ||
+  valueStr.startsWith("/uploads")
+) {
+  return true;
+}
+
+// Перевірка на розширення графічних файлів (замість простої крапки)
+const extensions = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"];
+return extensions.some((ext) => valueStr.endsWith(ext));
 
 /* ─── API helper ─────────────────────────────────────────── */
 async function api(path, opts = {}) {

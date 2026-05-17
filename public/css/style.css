@@ -571,6 +571,7 @@ img {
   padding: 4px 10px;
   border-radius: 50px;
   letter-spacing: 0.04em;
+  z-index: 100;
 }
 .product-card__tag.green {
   background: var(--accent);

@@ -1,6 +1,6 @@
 # 🐾 PawShop — Інтернет-магазин зоотоварів
 
-Повноцінний веб-додаток на **HTML + CSS + JavaScript** з бекендом на **Node.js + Express** і базою даних **MySQL**.
+Повноцінний вебдодаток на **HTML + CSS + JavaScript** з бекендом на **Node.js + Express** і базою даних **MySQL**.
 
 ---
 
